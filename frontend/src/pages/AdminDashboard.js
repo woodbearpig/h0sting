@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { MapView } from "@/components/MapView";
 import {
@@ -257,7 +257,10 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-2xl border-2 border-black max-h-[90vh] overflow-y-auto" data-testid="job-dialog">
-        <DialogHeader><DialogTitle className="font-display text-2xl font-black">{editing.id ? "Edit Job" : "New Job"}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl font-black">{editing.id ? "Edit Job" : "New Job"}</DialogTitle>
+          <DialogDescription>Configure the job title, content, custom form fields and default map area.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5"><Label>Title</Label>
             <Input data-testid="job-title-input" value={editing.title} onChange={(e) => setField("title", e.target.value)} placeholder="Downtown Tower Site" /></div>
@@ -344,6 +347,12 @@ function SettingsTab() {
         {settings.logo_url && <img src={settings.logo_url} alt="logo preview" className="h-16 w-16 object-cover border-2 border-black rounded" />}
         <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground border-2 border-black font-bold uppercase" data-testid="save-settings-btn">
           <Save className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save Content"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+ave className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save Content"}
         </Button>
       </div>
     </div>
