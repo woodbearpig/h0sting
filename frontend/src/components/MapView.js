@@ -31,32 +31,34 @@ function Recenter({ center }) {
 
 export const MapView = ({ center, zoom = 12, markers = [], recenterTo }) => {
   return (
-    <MapContainer center={center} zoom={zoom} scrollWheelZoom={true} data-testid="leaflet-map">
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {recenterTo && <Recenter center={recenterTo} />}
-      {markers.map((m, i) => (
-        <Marker
-          key={m.id || i}
-          position={[m.latitude, m.longitude]}
-          icon={i === 0 ? highlightIcon : L.Icon.Default.prototype}
-        >
-          <Popup>
-            <div className="text-sm">
-              <div className="font-bold">{m.contractor_name}</div>
-              <div>{m.email}</div>
-              <div className="font-mono text-xs mt-1">
-                {m.latitude.toFixed(5)}, {m.longitude.toFixed(5)}
+    <div data-testid="leaflet-map" className="h-full w-full">
+      <MapContainer center={center} zoom={zoom} scrollWheelZoom={true}>
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {recenterTo && <Recenter center={recenterTo} />}
+        {markers.map((m, i) => (
+          <Marker
+            key={m.id || i}
+            position={[m.latitude, m.longitude]}
+            icon={i === 0 ? highlightIcon : L.Icon.Default.prototype}
+          >
+            <Popup>
+              <div className="text-sm">
+                <div className="font-bold">{m.contractor_name}</div>
+                <div>{m.email}</div>
+                <div className="font-mono text-xs mt-1">
+                  {m.latitude.toFixed(5)}, {m.longitude.toFixed(5)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {new Date(m.created_at).toLocaleString()}
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {new Date(m.created_at).toLocaleString()}
-              </div>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
   );
 };
