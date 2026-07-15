@@ -274,14 +274,34 @@ export default function CheckInPage() {
           )}
         </div>
 
-        {/* Right: map */}
+        {/* Right: map / image / text (controlled from admin) */}
         <div className="lg:col-span-3">
-          <div className="h-[360px] lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24 border-t-2 lg:border-2 border-black lg:rounded-lg overflow-hidden">
-            <MapView center={center} zoom={area.zoom} markers={checkins} recenterTo={recenterTo} />
-          </div>
-          <div className="px-4 lg:px-0 py-2 text-xs uppercase tracking-widest font-bold text-muted-foreground" data-testid="pin-count">
-            {checkins.length} check-in{checkins.length === 1 ? "" : "s"} on this job · auto-refresh 5s
-          </div>
+          {job.display_mode === "image" ? (
+            <div data-testid="display-image" className="h-[360px] lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24 border-t-2 lg:border-2 border-black lg:rounded-lg overflow-hidden bg-muted">
+              {job.display_image_url ? (
+                <img src={job.display_image_url} alt={job.title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+                  No image set for this job.
+                </div>
+              )}
+            </div>
+          ) : job.display_mode === "text" ? (
+            <div data-testid="display-text" className="lg:sticky lg:top-24 border-t-2 lg:border-2 border-black lg:rounded-lg bg-card p-6 sm:p-8 lg:min-h-[calc(100vh-8rem)]">
+              <div className="prose prose-zinc max-w-none whitespace-pre-line text-base leading-relaxed">
+                {job.display_text || "No content set for this job."}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="h-[360px] lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24 border-t-2 lg:border-2 border-black lg:rounded-lg overflow-hidden">
+                <MapView center={center} zoom={area.zoom} markers={checkins} recenterTo={recenterTo} />
+              </div>
+              <div className="px-4 lg:px-0 py-2 text-xs uppercase tracking-widest font-bold text-muted-foreground" data-testid="pin-count">
+                {checkins.length} check-in{checkins.length === 1 ? "" : "s"} on this job · auto-refresh 5s
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

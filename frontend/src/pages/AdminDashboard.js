@@ -19,7 +19,8 @@ import {
 
 const emptyJob = () => ({
   title: "", description: "", hero_image_url: "", button_label: "Share Location",
-  custom_fields: [], default_map_area: { lat: 40.7128, lng: -74.006, zoom: 12 }, active: true,
+  custom_fields: [], default_map_area: { lat: 40.7128, lng: -74.006, zoom: 12 },
+  display_mode: "map", display_image_url: "", display_text: "", active: true,
 });
 
 export default function AdminDashboard() {
@@ -247,6 +248,9 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
         lng: parseFloat(editing.default_map_area.lng) || 0,
         zoom: parseInt(editing.default_map_area.zoom) || 12,
       },
+      display_mode: editing.display_mode || "map",
+      display_image_url: editing.display_image_url || "",
+      display_text: editing.display_text || "",
       active: editing.active,
     };
     try {
@@ -280,12 +284,52 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
           </div>
 
           <div className="border-2 border-black rounded-lg p-4">
-            <Label className="uppercase tracking-widest text-xs font-bold">Default Map Area</Label>
-            <div className="grid grid-cols-3 gap-3 mt-2">
-              <div><Label className="text-xs">Latitude</Label><Input data-testid="job-lat-input" value={editing.default_map_area.lat} onChange={(e) => setArea("lat", e.target.value)} /></div>
-              <div><Label className="text-xs">Longitude</Label><Input data-testid="job-lng-input" value={editing.default_map_area.lng} onChange={(e) => setArea("lng", e.target.value)} /></div>
-              <div><Label className="text-xs">Zoom</Label><Input data-testid="job-zoom-input" value={editing.default_map_area.zoom} onChange={(e) => setArea("zoom", e.target.value)} /></div>
+            <Label className="uppercase tracking-widest text-xs font-bold">Front Page Right Panel</Label>
+            <p className="text-xs text-muted-foreground mt-1">Choose what shows next to the check-in form.</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {[
+                { v: "map", label: "Live Map" },
+                { v: "image", label: "Image" },
+                { v: "text", label: "Text Block" },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  data-testid={`display-mode-${opt.v}`}
+                  onClick={() => setField("display_mode", opt.v)}
+                  className={`px-4 py-2 text-sm font-bold uppercase tracking-wide border-2 border-black rounded-md transition-colors ${
+                    (editing.display_mode || "map") === opt.v
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card hover:bg-muted"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+
+            {(editing.display_mode || "map") === "map" && (
+              <div className="grid grid-cols-3 gap-3 mt-4">
+                <div><Label className="text-xs">Latitude</Label><Input data-testid="job-lat-input" value={editing.default_map_area.lat} onChange={(e) => setArea("lat", e.target.value)} /></div>
+                <div><Label className="text-xs">Longitude</Label><Input data-testid="job-lng-input" value={editing.default_map_area.lng} onChange={(e) => setArea("lng", e.target.value)} /></div>
+                <div><Label className="text-xs">Zoom</Label><Input data-testid="job-zoom-input" value={editing.default_map_area.zoom} onChange={(e) => setArea("zoom", e.target.value)} /></div>
+              </div>
+            )}
+
+            {editing.display_mode === "image" && (
+              <div className="mt-4 space-y-1.5">
+                <Label className="text-xs">Image URL</Label>
+                <Input data-testid="job-display-image-input" value={editing.display_image_url} onChange={(e) => setField("display_image_url", e.target.value)} placeholder="https://…" />
+                {editing.display_image_url && <img src={editing.display_image_url} alt="preview" className="mt-2 max-h-40 w-full object-cover border-2 border-black rounded" />}
+              </div>
+            )}
+
+            {editing.display_mode === "text" && (
+              <div className="mt-4 space-y-1.5">
+                <Label className="text-xs">Text Content</Label>
+                <Textarea data-testid="job-display-text-input" value={editing.display_text} onChange={(e) => setField("display_text", e.target.value)} rows={6} placeholder="Safety briefing, site instructions, contact info…" />
+              </div>
+            )}
           </div>
 
           <div className="border-2 border-black rounded-lg p-4">

@@ -132,6 +132,9 @@ class JobInput(BaseModel):
     button_label: str = "Share Location"
     custom_fields: List[CustomField] = Field(default_factory=list)
     default_map_area: MapArea = Field(default_factory=MapArea)
+    display_mode: str = "map"          # "map" | "image" | "text"
+    display_image_url: str = ""
+    display_text: str = ""
     active: bool = True
 
 
@@ -142,6 +145,9 @@ class Job(BaseDocument):
     button_label: str = "Share Location"
     custom_fields: List[CustomField] = Field(default_factory=list)
     default_map_area: MapArea = Field(default_factory=MapArea)
+    display_mode: str = "map"
+    display_image_url: str = ""
+    display_text: str = ""
     active: bool = True
     created_at: str = Field(default_factory=now_iso)
 
