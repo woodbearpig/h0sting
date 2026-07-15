@@ -81,6 +81,9 @@ EOF
 # ---------------------------------------------------------------------------
 log "3/6 Setting up FastAPI backend (venv + PM2)"
 cd "$BACKEND_DIR"
+# emergentintegrations is an Emergent-internal package (not on public PyPI) and is
+# not used by this app — strip it so pip install works on a standard VPS.
+sed -i '/emergentintegrations/d' requirements.txt
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip
 ./venv/bin/pip install -r requirements.txt
