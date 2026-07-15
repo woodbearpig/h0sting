@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapView } from "@/components/MapView";
-import { PrivacyModal } from "@/components/PrivacyModal";
-import { MapPin, Loader2, CheckCircle2, HardHat, ShieldCheck } from "lucide-react";
+import { MapPin, Loader2, CheckCircle2, HardHat } from "lucide-react";
 
 export default function CheckInPage() {
   const { jobId } = useParams();
@@ -16,7 +15,6 @@ export default function CheckInPage() {
   const [loadingJob, setLoadingJob] = useState(true);
   const [form, setForm] = useState({ contractor_name: "", email: "", phone: "" });
   const [custom, setCustom] = useState({});
-  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [checkins, setCheckins] = useState([]);
@@ -81,10 +79,6 @@ export default function CheckInPage() {
       toast.error(err);
       return;
     }
-    setPrivacyOpen(true);
-  };
-
-  const handleConsent = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser.");
       return;
@@ -104,7 +98,6 @@ export default function CheckInPage() {
             longitude,
           });
           setSubmitted(true);
-          setPrivacyOpen(false);
           setRecenterTo([latitude, longitude]);
           toast.success("Location shared! You are checked in.");
           fetchCheckins();
@@ -277,9 +270,6 @@ export default function CheckInPage() {
                 )}
                 {job.button_label || "Share Location"}
               </Button>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 justify-center">
-                <ShieldCheck className="h-3 w-3" /> GPS captured once. Consent required (GDPR/CCPA).
-              </p>
             </div>
           )}
         </div>
@@ -294,13 +284,6 @@ export default function CheckInPage() {
           </div>
         </div>
       </div>
-
-      <PrivacyModal
-        open={privacyOpen}
-        onOpenChange={setPrivacyOpen}
-        onConsent={handleConsent}
-        loading={locating}
-      />
     </div>
   );
 }
