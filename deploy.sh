@@ -89,7 +89,7 @@ python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 
 pm2 delete cc-backend >/dev/null 2>&1 || true
-pm2 start "$BACKEND_DIR/venv/bin/uvicorn" --name cc-backend --cwd "$BACKEND_DIR" -- \
+pm2 start "$BACKEND_DIR/venv/bin/uvicorn" --name cc-backend --interpreter none --cwd "$BACKEND_DIR" -- \
   server:app --host 0.0.0.0 --port 8001
 pm2 save
 pm2 startup systemd -u root --hp /root >/dev/null 2>&1 || true
