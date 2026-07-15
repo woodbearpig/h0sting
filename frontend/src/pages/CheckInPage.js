@@ -23,7 +23,7 @@ export default function CheckInPage() {
   const [recenterTo, setRecenterTo] = useState(null);
 
   useEffect(() => {
-    api.get("/settings").then((r) => setSettings(r.data)).catch(() => {});
+    api.get("/settings").then((r) => setSettings(r.data)).catch((e) => console.error("Failed to load settings", e));
   }, []);
 
   useEffect(() => {
@@ -38,7 +38,8 @@ export default function CheckInPage() {
           j = jobs[0];
         }
         setJob(j || null);
-      } catch {
+      } catch (e) {
+        console.error("Failed to load job", e);
         setJob(null);
       } finally {
         setLoadingJob(false);

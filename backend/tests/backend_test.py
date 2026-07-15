@@ -1,13 +1,18 @@
 """Backend API tests for Contractor Check-In app."""
 import os
+from pathlib import Path
+
 import pytest
 import requests
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://contractor-checkin.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@techspider.site"
-ADMIN_PASSWORD = "Admin@12345"
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 # ------------- fixtures -------------
@@ -19,16 +24,15 @@ def api_client():
 
 
 @pytest.fixture(scope="session")
-def auth_token(api_client):
-    r = api_client.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+def auth_headers():
+    # Log in via a throwaway request so the shared api_client session stays
+    # unauthenticated (needed for the 401 tests). Auth uses an httpOnly cookie.
+    r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
     if r.status_code != 200:
         pytest.skip(f"Admin login failed: {r.status_code} {r.text}")
-    return r.json()["access_token"]
-
-
-@pytest.fixture(scope="session")
-def auth_headers(auth_token):
-    return {"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"}
+    token = r.cookies.get("access_token")
+    assert token, "login did not set access_token cookie"
+    return {"Cookie": f"access_token={token}", "Content-Type": "application/json"}
 
 
 # ------------- Health & root -------------
@@ -46,10 +50,11 @@ class TestAuth:
         r = api_client.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
         assert r.status_code == 200
         data = r.json()
-        assert "access_token" in data and isinstance(data["access_token"], str)
-        assert data["token_type"] == "bearer"
         assert data["user"]["email"] == ADMIN_EMAIL
         assert data["user"]["role"] == "admin"
+        # Token is delivered as a secure httpOnly cookie, not in the JSON body.
+        assert r.cookies.get("access_token")
+        api_client.cookies.clear()
 
     def test_login_invalid_password(self, api_client):
         r = api_client.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": "wrong"})
@@ -112,7 +117,7 @@ class TestJobs:
         r = api_client.get(f"{API}/jobs", params={"active_only": True})
         assert r.status_code == 200
         for j in r.json():
-            assert j.get("active") is True
+            assert j.get("active") == True
 
     def test_create_job_requires_auth(self, api_client):
         r = api_client.post(f"{API}/jobs", json={"title": "TEST_x"})

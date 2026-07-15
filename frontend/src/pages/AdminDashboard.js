@@ -26,7 +26,7 @@ export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => { logout(); navigate("/admin/login"); };
+  const handleLogout = async () => { await logout(); navigate("/admin/login"); };
 
   return (
     <div className="min-h-screen bg-background">
@@ -71,14 +71,20 @@ function CheckInsTab() {
   const [selected, setSelected] = useState("all");
   const [rows, setRows] = useState([]);
 
-  useEffect(() => { api.get("/jobs").then((r) => setJobs(r.data)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.get("/jobs").then((r) => setJobs(r.data)).catch((e) => console.error("Failed to load jobs", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchRows = useCallback(async () => {
     try {
       const params = selected === "all" ? {} : { job_id: selected };
       const data = (await api.get("/checkins", { params })).data;
       setRows(data);
-    } catch {}
+    } catch (e) {
+      console.error("Failed to load check-ins", e);
+      toast.error("Unable to load check-ins. Please refresh.");
+    }
   }, [selected]);
 
   useEffect(() => {
@@ -152,7 +158,7 @@ function JobsTab() {
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
 
-  const load = useCallback(() => { api.get("/jobs").then((r) => setJobs(r.data)).catch(() => {}); }, []);
+  const load = useCallback(() => { api.get("/jobs").then((r) => setJobs(r.data)).catch((e) => console.error("Failed to load jobs", e)); }, []);
   useEffect(() => { load(); }, [load]);
 
   const openNew = () => { setEditing(emptyJob()); setOpen(true); };
@@ -221,7 +227,7 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
   const setField = (k, v) => setEditing({ ...editing, [k]: v });
   const setArea = (k, v) => setEditing({ ...editing, default_map_area: { ...editing.default_map_area, [k]: v } });
 
-  const addField = () => setEditing({ ...editing, custom_fields: [...editing.custom_fields, { key: `field_${editing.custom_fields.length + 1}`, label: "", required: false }] });
+  const addField = () => setEditing({ ...editing, custom_fields: [...editing.custom_fields, { uid: crypto.randomUUID(), key: `field_${editing.custom_fields.length + 1}`, label: "", required: false }] });
   const updateField = (i, k, v) => {
     const cf = [...editing.custom_fields];
     cf[i] = { ...cf[i], [k]: v };
@@ -289,7 +295,7 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
             </div>
             <div className="space-y-2 mt-3">
               {editing.custom_fields.map((f, i) => (
-                <div key={i} className="flex items-center gap-2" data-testid="custom-field-row">
+                <div key={f.uid || f.key || i} className="flex items-center gap-2" data-testid="custom-field-row">
                   <Input className="flex-1" placeholder="Field label (e.g. Site Number)" value={f.label} onChange={(e) => updateField(i, "label", e.target.value)} data-testid={`field-label-${i}`} />
                   <label className="flex items-center gap-1 text-xs whitespace-nowrap">
                     <Switch checked={f.required} onCheckedChange={(v) => updateField(i, "required", v)} data-testid={`field-required-${i}`} /> Req
@@ -322,7 +328,10 @@ function SettingsTab() {
   const [settings, setSettings] = useState({ site_title: "", logo_url: "", tagline: "" });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { api.get("/settings").then((r) => setSettings(r.data)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.get("/settings").then((r) => setSettings(r.data)).catch((e) => console.error("Failed to load settings", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const save = async () => {
     setSaving(true);

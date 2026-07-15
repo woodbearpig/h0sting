@@ -3,15 +3,9 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-export const TOKEN_KEY = "cc_token";
-
-const api = axios.create({ baseURL: API });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+// Auth uses secure httpOnly cookies set by the backend; the token is never
+// exposed to JS (XSS-safe). withCredentials ensures the cookie is sent.
+const api = axios.create({ baseURL: API, withCredentials: true });
 
 export function formatApiErrorDetail(detail) {
   if (detail == null) return "Something went wrong. Please try again.";

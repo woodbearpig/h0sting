@@ -1,0 +1,51 @@
+{
+  "summary": "Re-tested after auth migration to httpOnly cookies. Backend: 21/21 pytest suite PASSES with cookie-based auth_headers fixture (login sets access_token httpOnly cookie; /auth/me and all protected endpoints return 401 without cookie and 200 with it; logout clears cookie). Frontend: all admin flows work — login redirects to /admin, cookie is httpOnly, session persists across full page reload, Jobs create/edit/copy-link/delete, Site Content save+persists across reload, Check-Ins table renders, logout clears session and /admin redirects to /admin/login. Public check-in flow: form fill -> Share Location -> GDPR privacy modal -> consent -> geolocation (mocked lat 40.7128 lng -74.006) -> success + pin on Leaflet map + pin-count=1. One minor testability issue found: data-testid=\"leaflet-map\" passed to react-leaflet MapContainer is not forwarded to the DOM (0 elements). The map itself is rendered as .leaflet-container and functions correctly, but tests that key off leaflet-map cannot find it.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "testability_issues": [
+      {
+        "component": "MapView (react-leaflet MapContainer)",
+        "issue": "data-testid=\"leaflet-map\" is passed as a prop to <MapContainer> but react-leaflet does NOT forward unknown props to the underlying div, so the attribute never appears in the DOM. .leaflet-container is present (1) and the map renders fine, but selectors on [data-testid=\"leaflet-map\"] find 0 elements.",
+        "selector": "[data-testid=\"leaflet-map\"]",
+        "priority": "LOW",
+        "fix": "Wrap MapContainer in a plain <div data-testid=\"leaflet-map\"> or add the attr via ref/whenReady onto the container element."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional, low priority) Wrap the react-leaflet <MapContainer> in a <div data-testid=\"leaflet-map\"> in /app/frontend/src/components/MapView.js so automated tests can locate the map by its documented testid.",
+    "(From iteration_1, still open, low priority) Wrap navigator.clipboard.writeText in try/catch in AdminDashboard.copyLink for graceful degradation on clipboard permission denial."
+  ],
+  "critical_code_review_comments": [
+    "server.py _set_auth_cookie: httponly=True, secure=True, samesite='none', max_age=43200, path='/' — matches httpOnly-cookie playbook. Requires same-site or explicit CORS_ORIGINS+allow_credentials=True (both present).",
+    "server.py get_current_user: correctly checks Authorization header first then falls back to access_token cookie — good backward-compat.",
+    "AuthContext.js: correctly removed localStorage; calls /auth/me on mount to restore session; login/logout hit the API. Cookie carries the session — verified httpOnly=True in browser.",
+    "api.js: withCredentials:true and no token interceptor — clean.",
+    "seed_admin logic: updates password hash on existing admin if env password changed (verify_password fallback) — matches playbook idempotency requirement.",
+    "bcrypt: uses bcrypt.hashpw with gensalt() -> $2b$ prefix; verified by successful login round-trip.",
+    "No brute-force lockout implemented on /api/auth/login (5-fail threshold from playbook not enforced). Not part of this review's feature list but flagging for completeness.",
+    "AdminDashboard.js still 350+ lines with 3 sub-tabs inline (CheckInsTab, JobsTab, SettingsTab) plus JobDialog — consider splitting into /components/admin/ for maintainability (non-blocking, carried over from iteration_1).",
+    "MapView.js: data-testid on MapContainer not forwarded — testability nit."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (21/21 pytest)",
+    "frontend": "100% on all requested flows (auth migration, admin CRUD, settings persist, public check-in with GDPR + geolocation, logout)"
+  },
+  "test_credentials": "admin@techspider.site / Admin@12345 (loaded from backend/.env, matches /app/memory/test_credentials.md)",
+  "seed_data_creation": "None permanent. Test job TEST_UI2_Job_edited was created and deleted during Playwright. One leftover TEST_UI_Job_1 from an initial retry cleaned up post-test via API. TEST_John check-ins from pytest were cascade-deleted with their parent test jobs. AUTOTEST_Job Renamed remains from iteration_1 seed data (harmless).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auth is fully cookie-based (httpOnly access_token). Pytest fixture `auth_headers` in /app/backend/tests/backend_test.py sends `Cookie: access_token=...` and works. For Playwright: page.context.grant_permissions([\"geolocation\"], origin=<REACT_APP_BACKEND_URL>) + page.context.set_geolocation({lat:40.7128,lng:-74.006}) before triggering share-location. Use longer waits (~1s) for the settings tab load after mount, otherwise input_value returns empty. The [data-testid=\"leaflet-map\"] selector currently does NOT resolve — use `.leaflet-container` instead until MapView.js is fixed.",
+  "rca_of_the_issue": "leaflet-map RCA: <MapContainer data-testid=\"leaflet-map\" ...> — react-leaflet's MapContainer explicitly picks known props (whenCreated, center, zoom, style, className, id, placeholder, etc.) and does NOT spread arbitrary attributes onto the rendered <div>. So the data-testid is silently dropped. Fix: <div data-testid=\"leaflet-map\" className=\"h-full w-full\"><MapContainer .../></div>."
+}

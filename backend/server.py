@@ -12,7 +12,7 @@ from typing import List, Optional, Annotated, Any
 import jwt
 import bcrypt
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, BeforeValidator, EmailStr, ConfigDict
@@ -174,18 +174,38 @@ class CheckIn(BaseDocument):
 
 
 # ---------------- Auth routes ----------------
+COOKIE_MAX_AGE = 43200  # 12 hours
+
+
+def _set_auth_cookie(response: Response, token: str):
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=COOKIE_MAX_AGE,
+        path="/",
+    )
+
+
 @api_router.post("/auth/login")
-async def login(payload: LoginInput):
+async def login(payload: LoginInput, response: Response):
     email = payload.email.lower()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(str(user["_id"]), email)
+    _set_auth_cookie(response, token)
     return {
-        "access_token": token,
-        "token_type": "bearer",
         "user": {"id": str(user["_id"]), "email": user["email"], "name": user.get("name", "Admin"), "role": user.get("role", "admin")},
     }
+
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    return {"status": "ok"}
 
 
 @api_router.get("/auth/me")
