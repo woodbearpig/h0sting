@@ -1,0 +1,351 @@
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import api, { formatApiErrorDetail } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+} from "@/components/ui/dialog";
+import { MapView } from "@/components/MapView";
+import {
+  HardHat, LogOut, Plus, Trash2, Pencil, Save, MapPin, Copy, Users, Briefcase, Settings2,
+} from "lucide-react";
+
+const emptyJob = () => ({
+  title: "", description: "", hero_image_url: "", button_label: "Share Location",
+  custom_fields: [], default_map_area: { lat: 40.7128, lng: -74.006, zoom: 12 }, active: true,
+});
+
+export default function AdminDashboard() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => { logout(); navigate("/admin/login"); };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b-2 border-black bg-secondary text-secondary-foreground sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 bg-primary flex items-center justify-center rounded border-2 border-black">
+              <HardHat className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <div className="font-display font-black text-lg leading-none">Admin Console</div>
+              <div className="text-xs uppercase tracking-widest opacity-70 font-bold">{user?.email}</div>
+            </div>
+          </div>
+          <Button variant="outline" onClick={handleLogout} data-testid="logout-btn"
+            className="border-2 border-white/30 bg-transparent text-white hover:bg-white/10">
+            <LogOut className="h-4 w-4 mr-2" /> Logout
+          </Button>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <Tabs defaultValue="checkins">
+          <TabsList className="border-2 border-black bg-card p-1">
+            <TabsTrigger value="checkins" data-testid="tab-checkins"><Users className="h-4 w-4 mr-2" />Check-Ins</TabsTrigger>
+            <TabsTrigger value="jobs" data-testid="tab-jobs"><Briefcase className="h-4 w-4 mr-2" />Jobs</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings"><Settings2 className="h-4 w-4 mr-2" />Site Content</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="checkins" className="mt-6"><CheckInsTab /></TabsContent>
+          <TabsContent value="jobs" className="mt-6"><JobsTab /></TabsContent>
+          <TabsContent value="settings" className="mt-6"><SettingsTab /></TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Check-Ins ---------------- */
+function CheckInsTab() {
+  const [jobs, setJobs] = useState([]);
+  const [selected, setSelected] = useState("all");
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => { api.get("/jobs").then((r) => setJobs(r.data)).catch(() => {}); }, []);
+
+  const fetchRows = useCallback(async () => {
+    try {
+      const params = selected === "all" ? {} : { job_id: selected };
+      const data = (await api.get("/checkins", { params })).data;
+      setRows(data);
+    } catch {}
+  }, [selected]);
+
+  useEffect(() => {
+    fetchRows();
+    const t = setInterval(fetchRows, 5000);
+    return () => clearInterval(t);
+  }, [fetchRows]);
+
+  const jobTitle = (id) => jobs.find((j) => j.id === id)?.title || id;
+  const mapCenter = rows.length ? [rows[0].latitude, rows[0].longitude] : [40.7128, -74.006];
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h2 className="font-display text-2xl font-black">All Check-Ins</h2>
+          <select
+            data-testid="checkins-job-filter"
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            className="border-2 border-black rounded-md h-9 px-3 text-sm bg-card font-medium"
+          >
+            <option value="all">All Jobs</option>
+            {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
+          </select>
+        </div>
+        <div className="border-2 border-black rounded-lg overflow-hidden bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse" data-testid="checkins-table">
+              <thead>
+                <tr className="bg-secondary text-secondary-foreground text-left uppercase text-xs tracking-wider">
+                  <th className="py-2 px-3">Name</th>
+                  <th className="py-2 px-3">Email</th>
+                  <th className="py-2 px-3">Phone</th>
+                  <th className="py-2 px-3">Coordinates</th>
+                  <th className="py-2 px-3">Job</th>
+                  <th className="py-2 px-3">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No check-ins yet.</td></tr>
+                ) : rows.map((r) => (
+                  <tr key={r.id} className="border-b border-border hover:bg-muted" data-testid="checkin-row">
+                    <td className="py-2 px-3 font-semibold">{r.contractor_name}</td>
+                    <td className="py-2 px-3">{r.email}</td>
+                    <td className="py-2 px-3">{r.phone}</td>
+                    <td className="py-2 px-3 font-mono text-xs">{r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}</td>
+                    <td className="py-2 px-3">{jobTitle(r.job_id)}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h2 className="font-display text-2xl font-black mb-3">Live Map</h2>
+        <div className="h-[420px] border-2 border-black rounded-lg overflow-hidden">
+          <MapView center={mapCenter} zoom={11} markers={rows} recenterTo={rows.length ? mapCenter : null} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Jobs ---------------- */
+function JobsTab() {
+  const [jobs, setJobs] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(() => { api.get("/jobs").then((r) => setJobs(r.data)).catch(() => {}); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => { setEditing(emptyJob()); setOpen(true); };
+  const openEdit = (j) => {
+    setEditing({
+      ...emptyJob(), ...j,
+      custom_fields: j.custom_fields || [],
+      default_map_area: j.default_map_area || emptyJob().default_map_area,
+    });
+    setOpen(true);
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Delete this job and all its check-ins?")) return;
+    await api.delete(`/jobs/${id}`);
+    toast.success("Job deleted");
+    load();
+  };
+
+  const copyLink = (id) => {
+    const url = `${window.location.origin}/checkin/${id}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Check-in link copied");
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-2xl font-black">Jobs</h2>
+        <Button onClick={openNew} data-testid="new-job-btn"
+          className="bg-primary text-primary-foreground border-2 border-black font-bold uppercase tracking-wide">
+          <Plus className="h-4 w-4 mr-1" /> New Job
+        </Button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        {jobs.map((j) => (
+          <div key={j.id} className="bg-card border-2 border-black rounded-lg p-5" data-testid="job-card">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="font-display text-lg font-bold leading-tight">{j.title}</h3>
+                <span className={`inline-block mt-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 border border-black ${j.active ? "bg-[hsl(142,71%,45%)] text-white" : "bg-muted text-muted-foreground"}`}>
+                  {j.active ? "Active" : "Inactive"}
+                </span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{j.description}</p>
+            <div className="text-xs text-muted-foreground mt-2">{(j.custom_fields || []).length} custom field(s)</div>
+            <div className="flex gap-2 mt-4 flex-wrap">
+              <Button size="sm" variant="outline" className="border-2 border-black" onClick={() => openEdit(j)} data-testid="edit-job-btn"><Pencil className="h-3 w-3 mr-1" />Edit</Button>
+              <Button size="sm" variant="outline" className="border-2 border-black" onClick={() => copyLink(j.id)} data-testid="copy-link-btn"><Copy className="h-3 w-3 mr-1" />Link</Button>
+              <Button size="sm" variant="outline" className="border-2 border-black text-destructive" onClick={() => remove(j.id)} data-testid="delete-job-btn"><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <JobDialog open={open} setOpen={setOpen} editing={editing} setEditing={setEditing} onSaved={load} />
+    </div>
+  );
+}
+
+function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
+  const [saving, setSaving] = useState(false);
+  if (!editing) return null;
+
+  const setField = (k, v) => setEditing({ ...editing, [k]: v });
+  const setArea = (k, v) => setEditing({ ...editing, default_map_area: { ...editing.default_map_area, [k]: v } });
+
+  const addField = () => setEditing({ ...editing, custom_fields: [...editing.custom_fields, { key: `field_${editing.custom_fields.length + 1}`, label: "", required: false }] });
+  const updateField = (i, k, v) => {
+    const cf = [...editing.custom_fields];
+    cf[i] = { ...cf[i], [k]: v };
+    if (k === "label") cf[i].key = v.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `field_${i + 1}`;
+    setEditing({ ...editing, custom_fields: cf });
+  };
+  const removeField = (i) => setEditing({ ...editing, custom_fields: editing.custom_fields.filter((_, idx) => idx !== i) });
+
+  const save = async () => {
+    if (!editing.title.trim()) { toast.error("Title is required"); return; }
+    setSaving(true);
+    const payload = {
+      title: editing.title, description: editing.description, hero_image_url: editing.hero_image_url,
+      button_label: editing.button_label, custom_fields: editing.custom_fields,
+      default_map_area: {
+        lat: parseFloat(editing.default_map_area.lat) || 0,
+        lng: parseFloat(editing.default_map_area.lng) || 0,
+        zoom: parseInt(editing.default_map_area.zoom) || 12,
+      },
+      active: editing.active,
+    };
+    try {
+      if (editing.id) await api.put(`/jobs/${editing.id}`, payload);
+      else await api.post("/jobs", payload);
+      toast.success("Job saved");
+      setOpen(false);
+      onSaved();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-w-2xl border-2 border-black max-h-[90vh] overflow-y-auto" data-testid="job-dialog">
+        <DialogHeader><DialogTitle className="font-display text-2xl font-black">{editing.id ? "Edit Job" : "New Job"}</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5"><Label>Title</Label>
+            <Input data-testid="job-title-input" value={editing.title} onChange={(e) => setField("title", e.target.value)} placeholder="Downtown Tower Site" /></div>
+          <div className="space-y-1.5"><Label>Description</Label>
+            <Textarea data-testid="job-desc-input" value={editing.description} onChange={(e) => setField("description", e.target.value)} rows={3} /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5"><Label>Hero Image URL</Label>
+              <Input data-testid="job-image-input" value={editing.hero_image_url} onChange={(e) => setField("hero_image_url", e.target.value)} placeholder="https://…" /></div>
+            <div className="space-y-1.5"><Label>Button Label</Label>
+              <Input data-testid="job-button-input" value={editing.button_label} onChange={(e) => setField("button_label", e.target.value)} /></div>
+          </div>
+
+          <div className="border-2 border-black rounded-lg p-4">
+            <Label className="uppercase tracking-widest text-xs font-bold">Default Map Area</Label>
+            <div className="grid grid-cols-3 gap-3 mt-2">
+              <div><Label className="text-xs">Latitude</Label><Input data-testid="job-lat-input" value={editing.default_map_area.lat} onChange={(e) => setArea("lat", e.target.value)} /></div>
+              <div><Label className="text-xs">Longitude</Label><Input data-testid="job-lng-input" value={editing.default_map_area.lng} onChange={(e) => setArea("lng", e.target.value)} /></div>
+              <div><Label className="text-xs">Zoom</Label><Input data-testid="job-zoom-input" value={editing.default_map_area.zoom} onChange={(e) => setArea("zoom", e.target.value)} /></div>
+            </div>
+          </div>
+
+          <div className="border-2 border-black rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <Label className="uppercase tracking-widest text-xs font-bold">Custom Form Fields</Label>
+              <Button size="sm" variant="outline" className="border-2 border-black" onClick={addField} data-testid="add-field-btn"><Plus className="h-3 w-3 mr-1" />Add</Button>
+            </div>
+            <div className="space-y-2 mt-3">
+              {editing.custom_fields.map((f, i) => (
+                <div key={i} className="flex items-center gap-2" data-testid="custom-field-row">
+                  <Input className="flex-1" placeholder="Field label (e.g. Site Number)" value={f.label} onChange={(e) => updateField(i, "label", e.target.value)} data-testid={`field-label-${i}`} />
+                  <label className="flex items-center gap-1 text-xs whitespace-nowrap">
+                    <Switch checked={f.required} onCheckedChange={(v) => updateField(i, "required", v)} data-testid={`field-required-${i}`} /> Req
+                  </label>
+                  <Button size="icon" variant="ghost" onClick={() => removeField(i)} data-testid={`field-remove-${i}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+              ))}
+              {editing.custom_fields.length === 0 && <p className="text-xs text-muted-foreground">No custom fields. Name, Email, Phone are always collected.</p>}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2">
+            <Switch checked={editing.active} onCheckedChange={(v) => setField("active", v)} data-testid="job-active-switch" />
+            <span className="text-sm font-medium">Active (visible on public check-in)</span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" className="border-2 border-black" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground border-2 border-black font-bold uppercase" data-testid="save-job-btn">
+            <Save className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save Job"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---------------- Settings ---------------- */
+function SettingsTab() {
+  const [settings, setSettings] = useState({ site_title: "", logo_url: "", tagline: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { api.get("/settings").then((r) => setSettings(r.data)).catch(() => {}); }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put("/settings", settings);
+      toast.success("Site content saved");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="max-w-xl">
+      <h2 className="font-display text-2xl font-black mb-4">Site Content</h2>
+      <div className="bg-card border-2 border-black rounded-lg p-6 space-y-4">
+        <div className="space-y-1.5"><Label>Site Title</Label>
+          <Input data-testid="settings-title" value={settings.site_title} onChange={(e) => setSettings({ ...settings, site_title: e.target.value })} /></div>
+        <div className="space-y-1.5"><Label>Tagline</Label>
+          <Input data-testid="settings-tagline" value={settings.tagline} onChange={(e) => setSettings({ ...settings, tagline: e.target.value })} /></div>
+        <div className="space-y-1.5"><Label>Logo URL</Label>
+          <Input data-testid="settings-logo" value={settings.logo_url} onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })} placeholder="https://…" /></div>
+        {settings.logo_url && <img src={settings.logo_url} alt="logo preview" className="h-16 w-16 object-cover border-2 border-black rounded" />}
+        <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground border-2 border-black font-bold uppercase" data-testid="save-settings-btn">
+          <Save className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save Content"}
+        </Button>
+      </div>
+    </div>
+  );
+}
