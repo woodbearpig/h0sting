@@ -12,7 +12,7 @@ from typing import List, Optional, Annotated, Any
 import jwt
 import bcrypt
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, BeforeValidator, EmailStr, ConfigDict
@@ -159,6 +159,9 @@ class Settings(BaseModel):
     site_title: str = "TechSpider Site"
     logo_url: str = ""
     tagline: str = "Contractor Check-In Portal"
+    admin_login_heading: str = "Admin Console"
+    admin_login_subtitle: str = "Contractor Check-In"
+    admin_login_bg_url: str = ""
 
 
 class ResponseItem(BaseModel):
@@ -329,6 +332,23 @@ async def list_checkins(job_id: Optional[str] = None, current=Depends(get_curren
 @api_router.get("/")
 async def root():
     return {"message": "Contractor Check-In API", "status": "ok"}
+
+
+# ---------------- Image upload (auth) ----------------
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
+
+
+@api_router.post("/upload")
+async def upload_image(file: UploadFile = File(...), current=Depends(get_current_user)):
+    content_type = file.content_type or ""
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed.")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large (max 5MB).")
+    import base64
+    b64 = base64.b64encode(data).decode("utf-8")
+    return {"url": f"data:{content_type};base64,{b64}"}
 
 
 app.include_router(api_router)

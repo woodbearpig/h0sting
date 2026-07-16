@@ -159,9 +159,6 @@ export default function CheckInPage() {
               </div>
             </div>
           </div>
-          <a href="/admin/login" data-testid="admin-link" className="text-xs uppercase tracking-widest font-bold text-muted-foreground hover:text-primary transition-colors">
-            Admin
-          </a>
         </div>
       </header>
 

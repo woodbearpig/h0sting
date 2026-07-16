@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { formatApiErrorDetail } from "@/lib/api";
+import api, { formatApiErrorDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HardHat, Loader2, Lock } from "lucide-react";
+
+const DEFAULT_BG = "https://images.pexels.com/photos/10951145/pexels-photo-10951145.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
 
 export default function AdminLogin() {
   const { login } = useAuth();
@@ -14,6 +16,11 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState({ admin_login_heading: "Admin Console", admin_login_subtitle: "Contractor Check-In", admin_login_bg_url: "" });
+
+  useEffect(() => {
+    api.get("/settings").then((r) => setSettings((s) => ({ ...s, ...r.data }))).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +39,7 @@ export default function AdminLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-secondary p-4 relative overflow-hidden">
       <img
-        src="https://images.pexels.com/photos/10951145/pexels-photo-10951145.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+        src={settings.admin_login_bg_url || DEFAULT_BG}
         alt=""
         className="absolute inset-0 w-full h-full object-cover opacity-20"
       />
@@ -42,9 +49,9 @@ export default function AdminLogin() {
             <HardHat className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-black tracking-tight leading-none">Admin Console</h1>
+            <h1 className="font-display text-2xl font-black tracking-tight leading-none" data-testid="login-heading">{settings.admin_login_heading || "Admin Console"}</h1>
             <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold mt-1">
-              Contractor Check-In
+              {settings.admin_login_subtitle || "Contractor Check-In"}
             </p>
           </div>
         </div>

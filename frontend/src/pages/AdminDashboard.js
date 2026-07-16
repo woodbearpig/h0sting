@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { MapView } from "@/components/MapView";
+import { ImageInput } from "@/components/ImageInput";
 import {
   HardHat, LogOut, Plus, Trash2, Pencil, Save, MapPin, Copy, Users, Briefcase, Settings2,
 } from "lucide-react";
@@ -295,12 +296,12 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
             <Input data-testid="job-title-input" value={editing.title} onChange={(e) => setField("title", e.target.value)} placeholder="Downtown Tower Site" /></div>
           <div className="space-y-1.5"><Label>Description</Label>
             <Textarea data-testid="job-desc-input" value={editing.description} onChange={(e) => setField("description", e.target.value)} rows={3} /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5"><Label>Hero Image URL</Label>
-              <Input data-testid="job-image-input" value={editing.hero_image_url} onChange={(e) => setField("hero_image_url", e.target.value)} placeholder="https://…" /></div>
-            <div className="space-y-1.5"><Label>Button Label</Label>
-              <Input data-testid="job-button-input" value={editing.button_label} onChange={(e) => setField("button_label", e.target.value)} /></div>
+          <div className="space-y-1.5">
+            <Label>Hero Image <span className="text-muted-foreground font-normal">(top-left "On-Site Check-In" block)</span></Label>
+            <ImageInput testId="job-image-input" value={editing.hero_image_url} onChange={(v) => setField("hero_image_url", v)} />
           </div>
+          <div className="space-y-1.5"><Label>Button Label</Label>
+            <Input data-testid="job-button-input" value={editing.button_label} onChange={(e) => setField("button_label", e.target.value)} /></div>
 
           <div className="border-2 border-black rounded-lg p-4">
             <Label className="uppercase tracking-widest text-xs font-bold">Front Page Right Panel</Label>
@@ -337,9 +338,8 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
 
             {editing.display_mode === "image" && (
               <div className="mt-4 space-y-1.5">
-                <Label className="text-xs">Image URL</Label>
-                <Input data-testid="job-display-image-input" value={editing.display_image_url} onChange={(e) => setField("display_image_url", e.target.value)} placeholder="https://…" />
-                {editing.display_image_url && <img src={editing.display_image_url} alt="preview" className="mt-2 max-h-40 w-full object-cover border-2 border-black rounded" />}
+                <Label className="text-xs">Panel Image</Label>
+                <ImageInput testId="job-display-image-input" value={editing.display_image_url} onChange={(v) => setField("display_image_url", v)} />
               </div>
             )}
 
@@ -403,7 +403,7 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
 
 /* ---------------- Settings ---------------- */
 function SettingsTab() {
-  const [settings, setSettings] = useState({ site_title: "", logo_url: "", tagline: "" });
+  const [settings, setSettings] = useState({ site_title: "", logo_url: "", tagline: "", admin_login_heading: "", admin_login_subtitle: "", admin_login_bg_url: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -429,9 +429,19 @@ function SettingsTab() {
           <Input data-testid="settings-title" value={settings.site_title} onChange={(e) => setSettings({ ...settings, site_title: e.target.value })} /></div>
         <div className="space-y-1.5"><Label>Tagline</Label>
           <Input data-testid="settings-tagline" value={settings.tagline} onChange={(e) => setSettings({ ...settings, tagline: e.target.value })} /></div>
-        <div className="space-y-1.5"><Label>Logo URL</Label>
-          <Input data-testid="settings-logo" value={settings.logo_url} onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })} placeholder="https://…" /></div>
-        {settings.logo_url && <img src={settings.logo_url} alt="logo preview" className="h-16 w-16 object-cover border-2 border-black rounded" />}
+        <div className="space-y-1.5"><Label>Logo</Label>
+          <ImageInput testId="settings-logo" value={settings.logo_url} onChange={(v) => setSettings({ ...settings, logo_url: v })} previewClassName="h-16 w-16" /></div>
+
+        <div className="border-2 border-black rounded-lg p-4 space-y-3">
+          <Label className="uppercase tracking-widest text-xs font-bold">Admin Login Page</Label>
+          <div className="space-y-1.5"><Label className="text-xs">Login Heading</Label>
+            <Input data-testid="settings-login-heading" value={settings.admin_login_heading} onChange={(e) => setSettings({ ...settings, admin_login_heading: e.target.value })} placeholder="Admin Console" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Login Subtitle</Label>
+            <Input data-testid="settings-login-subtitle" value={settings.admin_login_subtitle} onChange={(e) => setSettings({ ...settings, admin_login_subtitle: e.target.value })} placeholder="Contractor Check-In" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Login Background Image</Label>
+            <ImageInput testId="settings-login-bg" value={settings.admin_login_bg_url} onChange={(v) => setSettings({ ...settings, admin_login_bg_url: v })} /></div>
+        </div>
+
         <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground border-2 border-black font-bold uppercase" data-testid="save-settings-btn">
           <Save className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save Content"}
         </Button>
