@@ -19,7 +19,13 @@ import {
 
 const emptyJob = () => ({
   title: "", description: "", hero_image_url: "", button_label: "Share Location",
-  custom_fields: [], default_map_area: { lat: 40.7128, lng: -74.006, zoom: 12 },
+  form_heading: "Your Details",
+  custom_fields: [
+    { uid: crypto.randomUUID(), key: "full_name", label: "Full Name", type: "text", required: true },
+    { uid: crypto.randomUUID(), key: "email", label: "Email", type: "email", required: true },
+    { uid: crypto.randomUUID(), key: "phone", label: "Phone", type: "tel", required: true },
+  ],
+  default_map_area: { lat: 40.7128, lng: -74.006, zoom: 12 },
   display_mode: "map", display_image_url: "", display_text: "", active: true,
 });
 
