@@ -32,6 +32,8 @@ Build a "Contractor Check-In" web app for real-time contractor location tracking
 
 ## VPS Support Log
 - 2026-06: Admin login on VPS (bondforgiveness.com) returned "Invalid email or password". ROOT CAUSE: admin password hash is seeded/re-synced only at backend startup (server.py L394-396); user changed `.env` ADMIN_PASSWORD but never restarted `cc-backend`, so Mongo held the old hash. FIX: `pm2 restart cc-backend` re-syncs hash to `.env`. Verified working by user. REMINDER for future: any ADMIN_EMAIL/ADMIN_PASSWORD `.env` change requires `pm2 restart cc-backend`.
+- 2026-06: Dynamic browser tab title added (App.js ThemeLoader sets document.title from settings). Added separate editable "Browser Tab Title" settings field (falls back to Site Title — Tagline). NOTE: relative `/api` does NOT proxy on localhost:3000 dev server — always test via REACT_APP_BACKEND_URL preview URL.
+- 2026-06: Link-preview (Open Graph) meta made editable from admin (Option B). Added Settings fields share_title/share_description/share_image_url + admin "Link Preview" section. Backend serves SPA index.html via catch-all `@app.get("/{full_path:path}")` injecting og/twitter meta (server.py `_inject_meta`), and `/api/share-image` serves the uploaded/data-URL image so crawlers can load it. Requires VPS Nginx to proxy page HTML to backend — see /app/LINK_PREVIEW_SETUP.md. Backend verified via curl; admin fields verified on preview. REMINDER: user must "Save to Github" then pull on VPS — GitHub was behind /app repo which is why an earlier field appeared missing.
 
 ## Next Tasks
 - Await user feedback; consider CSV export and photo upload as next enhancement.

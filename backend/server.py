@@ -5,6 +5,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import re
+import base64
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Annotated, Any
@@ -13,6 +15,7 @@ import jwt
 import bcrypt
 from bson import ObjectId
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, BeforeValidator, EmailStr, ConfigDict
@@ -170,6 +173,9 @@ class Settings(BaseModel):
     logo_url: str = ""
     tagline: str = "Contractor Check-In Portal"
     browser_tab_title: str = ""
+    share_title: str = ""
+    share_description: str = ""
+    share_image_url: str = ""
     primary_color: str = "#EA580C"
     admin_login_heading: str = "Admin Console"
     admin_login_subtitle: str = "Contractor Check-In"
@@ -363,7 +369,88 @@ async def upload_image(file: UploadFile = File(...), current=Depends(get_current
     return {"url": f"data:{content_type};base64,{b64}"}
 
 
+# ---------------- Social share image (public) ----------------
+async def _load_settings() -> Settings:
+    doc = await db.settings.find_one({"_id": "global"})
+    if not doc:
+        return Settings()
+    doc.pop("_id", None)
+    return Settings(**doc)
+
+
+@api_router.get("/share-image")
+async def share_image():
+    s = await _load_settings()
+    img = s.share_image_url or s.logo_url or ""
+    if img.startswith("data:") and "," in img:
+        header, b64 = img.split(",", 1)
+        ctype = header.split(";")[0].replace("data:", "") or "image/png"
+        return Response(content=base64.b64decode(b64), media_type=ctype)
+    if img.startswith("http"):
+        return RedirectResponse(img)
+    raise HTTPException(status_code=404, detail="No share image set")
+
+
 app.include_router(api_router)
+
+
+# ---------------- Server-rendered SPA (injects social meta for link previews) ----------------
+INDEX_CANDIDATES = [
+    os.environ.get("FRONTEND_INDEX_PATH"),
+    str(ROOT_DIR.parent / "frontend" / "build" / "index.html"),
+    str(ROOT_DIR.parent / "frontend" / "public" / "index.html"),
+]
+
+
+def _find_index_html() -> Optional[str]:
+    for p in INDEX_CANDIDATES:
+        if p and Path(p).is_file():
+            return p
+    return None
+
+
+def _esc(s: str) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def _inject_meta(html: str, s: Settings, base_url: str, has_image: bool) -> str:
+    title = s.share_title or s.browser_tab_title or " — ".join([x for x in [s.site_title, s.tagline] if x]) or "Check-In"
+    desc = s.share_description or s.tagline or ""
+    image = f"{base_url}/api/share-image" if has_image else ""
+    tags = [
+        f"<title>{_esc(title)}</title>",
+        f'<meta name="description" content="{_esc(desc)}" />',
+        '<meta property="og:type" content="website" />',
+        f'<meta property="og:title" content="{_esc(title)}" />',
+        f'<meta property="og:description" content="{_esc(desc)}" />',
+        f'<meta property="og:url" content="{_esc(base_url)}" />',
+        f'<meta name="twitter:card" content="{"summary_large_image" if image else "summary"}" />',
+        f'<meta name="twitter:title" content="{_esc(title)}" />',
+        f'<meta name="twitter:description" content="{_esc(desc)}" />',
+    ]
+    if image:
+        tags.append(f'<meta property="og:image" content="{_esc(image)}" />')
+        tags.append(f'<meta name="twitter:image" content="{_esc(image)}" />')
+    html = re.sub(r"<title>.*?</title>", "", html, count=1, flags=re.DOTALL)
+    html = re.sub(r'<meta\s+name="description"[^>]*>', "", html, flags=re.IGNORECASE)
+    return html.replace("</head>", "\n    " + "\n    ".join(tags) + "\n</head>", 1)
+
+
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def serve_spa(full_path: str, request: Request):
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail="Not found")
+    index_path = _find_index_html()
+    if not index_path:
+        return JSONResponse({"message": "Contractor Check-In API", "status": "ok"})
+    html = Path(index_path).read_text(encoding="utf-8")
+    s = await _load_settings()
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("host", request.url.netloc)
+    base_url = f"{proto}://{host}"
+    has_image = bool(s.share_image_url or s.logo_url)
+    return HTMLResponse(_inject_meta(html, s, base_url, has_image))
+
 
 app.add_middleware(
     CORSMiddleware,

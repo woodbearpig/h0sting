@@ -437,7 +437,7 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
 
 /* ---------------- Settings ---------------- */
 function SettingsTab() {
-  const [settings, setSettings] = useState({ site_title: "", logo_url: "", tagline: "", browser_tab_title: "", primary_color: "#EA580C", admin_login_heading: "", admin_login_subtitle: "", admin_login_bg_url: "" });
+  const [settings, setSettings] = useState({ site_title: "", logo_url: "", tagline: "", browser_tab_title: "", share_title: "", share_description: "", share_image_url: "", primary_color: "#EA580C", admin_login_heading: "", admin_login_subtitle: "", admin_login_bg_url: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -468,6 +468,17 @@ function SettingsTab() {
           <Input data-testid="settings-tab-title" value={settings.browser_tab_title || ""} onChange={(e) => setSettings({ ...settings, browser_tab_title: e.target.value })} placeholder="e.g. Bond Forgiveness" /></div>
         <div className="space-y-1.5"><Label>Logo</Label>
           <ImageInput testId="settings-logo" value={settings.logo_url} onChange={(v) => setSettings({ ...settings, logo_url: v })} previewClassName="h-16 w-16" /></div>
+
+        <div className="border-2 border-black rounded-lg p-4 space-y-3">
+          <Label className="uppercase tracking-widest text-xs font-bold">Link Preview (when the URL is shared)</Label>
+          <p className="text-xs text-muted-foreground">Controls the title, text and thumbnail shown when the site link is shared in a text, WhatsApp, Slack, etc. Leave blank to fall back to the tab title / logo.</p>
+          <div className="space-y-1.5"><Label className="text-xs">Preview Title</Label>
+            <Input data-testid="settings-share-title" value={settings.share_title || ""} onChange={(e) => setSettings({ ...settings, share_title: e.target.value })} placeholder="e.g. Bond Forgiveness" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Preview Description</Label>
+            <Textarea data-testid="settings-share-description" rows={2} value={settings.share_description || ""} onChange={(e) => setSettings({ ...settings, share_description: e.target.value })} placeholder="e.g. Contractor on-site check-in portal." /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Preview Image</Label>
+            <ImageInput testId="settings-share-image" value={settings.share_image_url} onChange={(v) => setSettings({ ...settings, share_image_url: v })} previewClassName="h-24 w-full" /></div>
+        </div>
 
         <div className="space-y-1.5">
           <Label>Brand Color <span className="text-muted-foreground font-normal">(applied to buttons &amp; accents everywhere)</span></Label>
