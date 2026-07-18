@@ -13,7 +13,10 @@ import AdminDashboard from "@/pages/AdminDashboard";
 function ThemeLoader() {
   useEffect(() => {
     api.get("/settings").then((r) => {
-      if (r.data?.primary_color) applyPrimaryColor(r.data.primary_color);
+      const s = r.data || {};
+      if (s.primary_color) applyPrimaryColor(s.primary_color);
+      const title = [s.site_title, s.tagline].filter(Boolean).join(" — ");
+      if (title) document.title = title;
     }).catch(() => {});
   }, []);
   return null;
