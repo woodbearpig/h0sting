@@ -115,10 +115,10 @@ class TestJobs:
         for j in jobs:
             assert j.get("form_heading"), f"job {j['id']} missing form_heading"
             keys = {f["key"] for f in j.get("custom_fields", [])}
-            # Must include the 3 default contact fields (from seed OR migration)
-            assert "full_name" in keys or "name" in keys, f"job {j['id']} missing full_name field"
-            assert "email" in keys, f"job {j['id']} missing email field"
-            assert "phone" in keys, f"job {j['id']} missing phone field"
+            # Must include a name field plus at least one contact field.
+            # (Admins may intentionally remove phone/email from a migrated job.)
+            assert "full_name" in keys or "name" in keys, f"job {j['id']} missing name field"
+            assert ("email" in keys) or ("phone" in keys), f"job {j['id']} missing contact field"
 
     def test_create_job_with_form_heading_and_typed_fields(self, api_client, auth_headers):
         payload = {
