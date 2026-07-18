@@ -485,6 +485,11 @@ function SettingsTab() {
               className="max-w-[160px] font-mono"
             />
           </div>
+          {settings.primary_color && !/^#[0-9a-fA-F]{6}$/.test(settings.primary_color) && (
+            <p className="text-xs text-destructive" data-testid="settings-color-warning">
+              Enter a 6-digit hex code like <span className="font-mono">#EA580C</span>.
+            </p>
+          )}
         </div>
 
         <div className="border-2 border-black rounded-lg p-4 space-y-3">
