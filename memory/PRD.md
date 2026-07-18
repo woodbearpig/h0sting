@@ -30,5 +30,8 @@ Build a "Contractor Check-In" web app for real-time contractor location tracking
 - P2: CSV export of check-ins; split AdminDashboard into smaller files.
 - P2: WebSocket live push instead of polling.
 
+## VPS Support Log
+- 2026-06: Admin login on VPS (bondforgiveness.com) returned "Invalid email or password". ROOT CAUSE: admin password hash is seeded/re-synced only at backend startup (server.py L394-396); user changed `.env` ADMIN_PASSWORD but never restarted `cc-backend`, so Mongo held the old hash. FIX: `pm2 restart cc-backend` re-syncs hash to `.env`. Verified working by user. REMINDER for future: any ADMIN_EMAIL/ADMIN_PASSWORD `.env` change requires `pm2 restart cc-backend`.
+
 ## Next Tasks
 - Await user feedback; consider CSV export and photo upload as next enhancement.
