@@ -148,6 +148,9 @@ class JobInput(BaseModel):
     share_title: str = ""
     share_description: str = ""
     share_image_url: str = ""
+    success_heading: str = "You're checked in!"
+    success_body: str = "Your location was shared successfully. The supervisor has been notified."
+    success_button_label: str = "Check in another worker"
     active: bool = True
 
 
@@ -170,6 +173,9 @@ class Job(BaseDocument):
     share_title: str = ""
     share_description: str = ""
     share_image_url: str = ""
+    success_heading: str = "You're checked in!"
+    success_body: str = "Your location was shared successfully. The supervisor has been notified."
+    success_button_label: str = "Check in another worker"
     active: bool = True
     created_at: str = Field(default_factory=now_iso)
 
@@ -351,6 +357,36 @@ async def list_checkins(job_id: Optional[str] = None, current=Depends(get_curren
     query = {"job_id": job_id} if job_id else {}
     docs = await db.checkins.find(query).sort("created_at", -1).to_list(2000)
     return [CheckIn.from_mongo(d) for d in docs]
+
+
+class BulkDeleteInput(BaseModel):
+    ids: List[str] = Field(default_factory=list)
+
+
+@api_router.post("/checkins/bulk-delete")
+async def bulk_delete_checkins(payload: BulkDeleteInput, current=Depends(get_current_user)):
+    oids = [ObjectId(i) for i in payload.ids if ObjectId.is_valid(i)]
+    if not oids:
+        return {"deleted": 0}
+    res = await db.checkins.delete_many({"_id": {"$in": oids}})
+    return {"deleted": res.deleted_count}
+
+
+@api_router.delete("/checkins")
+async def clear_checkins(job_id: Optional[str] = None, current=Depends(get_current_user)):
+    query = {"job_id": job_id} if job_id else {}
+    res = await db.checkins.delete_many(query)
+    return {"deleted": res.deleted_count}
+
+
+@api_router.delete("/checkins/{checkin_id}")
+async def delete_checkin(checkin_id: str, current=Depends(get_current_user)):
+    if not ObjectId.is_valid(checkin_id):
+        raise HTTPException(status_code=404, detail="Check-in not found")
+    res = await db.checkins.delete_one({"_id": ObjectId(checkin_id)})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Check-in not found")
+    return {"deleted": 1}
 
 
 @api_router.get("/")

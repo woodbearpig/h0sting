@@ -338,6 +338,135 @@ class TestCheckIns:
         r = api_client.post(f"{API}/checkins", json=payload)
         assert r.status_code == 404
 
+    # ---------- NEW: single/bulk/clear check-in deletion + auth guards ----------
+    def test_delete_checkin_requires_auth(self, api_client, created_job):
+        # create a check-in
+        cr = api_client.post(f"{API}/checkins", json={
+            "job_id": created_job["id"],
+            "responses": [{"key": "full_name", "label": "Full Name", "value": "TEST_AuthGuardSingle"}],
+            "latitude": 1.0, "longitude": 2.0,
+        })
+        assert cr.status_code == 200
+        cid = cr.json()["id"]
+        # unauth delete -> 401
+        r = requests.delete(f"{API}/checkins/{cid}")
+        assert r.status_code == 401
+
+    def test_bulk_delete_requires_auth(self, api_client):
+        r = requests.post(f"{API}/checkins/bulk-delete", json={"ids": []})
+        assert r.status_code == 401
+
+    def test_clear_checkins_requires_auth(self, api_client):
+        r = requests.delete(f"{API}/checkins")
+        assert r.status_code == 401
+
+    def test_delete_single_checkin_persists(self, api_client, auth_headers, created_job):
+        # create one
+        cr = api_client.post(f"{API}/checkins", json={
+            "job_id": created_job["id"],
+            "responses": [{"key": "full_name", "label": "Full Name", "value": "TEST_DeleteOne"}],
+            "latitude": 10.0, "longitude": 20.0,
+        })
+        assert cr.status_code == 200
+        cid = cr.json()["id"]
+        # delete with cookie auth
+        dr = requests.delete(f"{API}/checkins/{cid}", headers=auth_headers)
+        assert dr.status_code == 200
+        assert dr.json().get("deleted") == 1
+        # verify gone (admin list)
+        rows = requests.get(f"{API}/checkins", headers=auth_headers, params={"job_id": created_job["id"]}).json()
+        assert all(x["id"] != cid for x in rows)
+        # deleting again -> 404
+        dr2 = requests.delete(f"{API}/checkins/{cid}", headers=auth_headers)
+        assert dr2.status_code == 404
+
+    def test_delete_checkin_invalid_id_returns_404(self, api_client, auth_headers):
+        r = requests.delete(f"{API}/checkins/not-a-real-id", headers=auth_headers)
+        assert r.status_code == 404
+
+    def test_bulk_delete_checkins(self, api_client, auth_headers, created_job):
+        ids = []
+        for i in range(3):
+            r = api_client.post(f"{API}/checkins", json={
+                "job_id": created_job["id"],
+                "responses": [{"key": "full_name", "label": "Full Name", "value": f"TEST_Bulk_{i}"}],
+                "latitude": 1.0 + i, "longitude": 2.0 + i,
+            })
+            assert r.status_code == 200
+            ids.append(r.json()["id"])
+        # include one invalid id - should be ignored
+        payload = {"ids": ids + ["not-valid"]}
+        dr = requests.post(f"{API}/checkins/bulk-delete", json=payload, headers=auth_headers)
+        assert dr.status_code == 200
+        assert dr.json().get("deleted") == 3
+        # verify persistence
+        rows = requests.get(f"{API}/checkins", headers=auth_headers, params={"job_id": created_job["id"]}).json()
+        remaining = {r["id"] for r in rows}
+        for i in ids:
+            assert i not in remaining
+
+    def test_bulk_delete_empty_ids(self, api_client, auth_headers):
+        dr = requests.post(f"{API}/checkins/bulk-delete", json={"ids": []}, headers=auth_headers)
+        assert dr.status_code == 200
+        assert dr.json().get("deleted") == 0
+
+    def test_clear_all_checkins_for_job(self, api_client, auth_headers):
+        # create isolated job with a few check-ins
+        j = requests.post(f"{API}/jobs", json={"title": "TEST_ClearJob", "active": True}, headers=auth_headers).json()
+        for i in range(2):
+            r = api_client.post(f"{API}/checkins", json={
+                "job_id": j["id"],
+                "responses": [{"key": "full_name", "label": "Full Name", "value": f"TEST_Clear_{i}"}],
+                "latitude": 5.0 + i, "longitude": 6.0 + i,
+            })
+            assert r.status_code == 200
+        # clear only this job's check-ins
+        dr = requests.delete(f"{API}/checkins", params={"job_id": j["id"]}, headers=auth_headers)
+        assert dr.status_code == 200
+        assert dr.json().get("deleted") == 2
+        # verify none for this job
+        rows = requests.get(f"{API}/checkins", headers=auth_headers, params={"job_id": j["id"]}).json()
+        assert rows == []
+        # cleanup job
+        requests.delete(f"{API}/jobs/{j['id']}", headers=auth_headers)
+
+    # ---------- NEW: customizable success message on Job ----------
+    def test_job_defaults_include_success_fields(self, api_client, auth_headers):
+        cr = requests.post(f"{API}/jobs", json={"title": "TEST_SuccessDefaults", "active": True}, headers=auth_headers)
+        assert cr.status_code == 200
+        job = cr.json()
+        assert job.get("success_heading")
+        assert job.get("success_body")
+        assert job.get("success_button_label")
+        requests.delete(f"{API}/jobs/{job['id']}", headers=auth_headers)
+
+    def test_job_update_success_fields_persist(self, api_client, auth_headers):
+        cr = requests.post(f"{API}/jobs", json={"title": "TEST_SuccessEdit", "active": True}, headers=auth_headers)
+        job = cr.json()
+        job_id = job["id"]
+        upd = {
+            "title": job["title"],
+            "success_heading": "TEST_Custom Heading!",
+            "success_body": "TEST_Custom body text.",
+            "success_button_label": "TEST_Do it again",
+            "active": True,
+        }
+        ur = requests.put(f"{API}/jobs/{job_id}", json=upd, headers=auth_headers)
+        assert ur.status_code == 200
+        got = requests.get(f"{API}/jobs/{job_id}").json()
+        assert got["success_heading"] == "TEST_Custom Heading!"
+        assert got["success_body"] == "TEST_Custom body text."
+        assert got["success_button_label"] == "TEST_Do it again"
+        requests.delete(f"{API}/jobs/{job_id}", headers=auth_headers)
+
+    def test_public_jobs_return_success_fields(self, api_client):
+        jobs = api_client.get(f"{API}/jobs").json()
+        assert len(jobs) >= 1
+        for j in jobs:
+            assert "success_heading" in j
+            assert "success_body" in j
+            assert "success_button_label" in j
+
     def test_delete_job_cascades_checkins(self, api_client, auth_headers):
         j = api_client.post(f"{API}/jobs", json={"title": "TEST_Cascade_v3", "active": True}, headers=auth_headers).json()
         api_client.post(f"{API}/checkins", json={

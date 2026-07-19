@@ -86,6 +86,7 @@ function CheckInsTab() {
   const [jobs, setJobs] = useState([]);
   const [selected, setSelected] = useState("all");
   const [rows, setRows] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   useEffect(() => {
     api.get("/jobs").then((r) => setJobs(r.data)).catch((e) => console.error("Failed to load jobs", e));
@@ -110,39 +111,106 @@ function CheckInsTab() {
   }, [fetchRows]);
 
   const jobTitle = (id) => jobs.find((j) => j.id === id)?.title || id;
-  const mapCenter = rows.length ? [rows[0].latitude, rows[0].longitude] : [40.7128, -74.006];
+
+  const toggleOne = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // Map shows only selected pins; if none selected, show all.
+  const mapRows = selectedIds.size ? rows.filter((r) => selectedIds.has(r.id)) : rows;
+  const mapCenter = mapRows.length ? [mapRows[0].latitude, mapRows[0].longitude] : [40.7128, -74.006];
+
+  const deleteOne = async (id) => {
+    if (!window.confirm("Delete this check-in? This cannot be undone.")) return;
+    try {
+      await api.delete(`/checkins/${id}`);
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      toast.success("Check-in deleted");
+      fetchRows();
+    } catch (e) { toast.error("Delete failed"); }
+  };
+  const deleteSelected = async () => {
+    if (!selectedIds.size) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected check-in(s)? This cannot be undone.`)) return;
+    try {
+      await api.post("/checkins/bulk-delete", { ids: Array.from(selectedIds) });
+      clearSelection();
+      toast.success("Selected check-ins deleted");
+      fetchRows();
+    } catch (e) { toast.error("Delete failed"); }
+  };
+  const clearAll = async () => {
+    if (!rows.length) return;
+    const scope = selected === "all" ? "ALL check-ins" : `all check-ins for "${jobTitle(selected)}"`;
+    if (!window.confirm(`Delete ${scope}? This cannot be undone.`)) return;
+    try {
+      await api.delete("/checkins", { params: selected === "all" ? {} : { job_id: selected } });
+      clearSelection();
+      toast.success("Check-ins cleared");
+      fetchRows();
+    } catch (e) { toast.error("Clear failed"); }
+  };
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2">
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h2 className="font-display text-2xl font-black">All Check-Ins</h2>
-          <select
-            data-testid="checkins-job-filter"
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            className="border-2 border-black rounded-md h-9 px-3 text-sm bg-card font-medium"
-          >
-            <option value="all">All Jobs</option>
-            {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
-          </select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="outline" className="border-2 border-black text-destructive disabled:opacity-40"
+              onClick={deleteSelected} disabled={!selectedIds.size} data-testid="delete-selected-btn">
+              <Trash2 className="h-3 w-3 mr-1" /> Delete Selected{selectedIds.size ? ` (${selectedIds.size})` : ""}
+            </Button>
+            <Button size="sm" variant="outline" className="border-2 border-black text-destructive disabled:opacity-40"
+              onClick={clearAll} disabled={!rows.length} data-testid="clear-all-checkins-btn">
+              <Trash2 className="h-3 w-3 mr-1" /> Clear All
+            </Button>
+            <select
+              data-testid="checkins-job-filter"
+              value={selected}
+              onChange={(e) => { setSelected(e.target.value); clearSelection(); }}
+              className="border-2 border-black rounded-md h-9 px-3 text-sm bg-card font-medium"
+            >
+              <option value="all">All Jobs</option>
+              {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
+            </select>
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground mb-2" data-testid="map-selection-hint">
+          {selectedIds.size
+            ? `Showing ${selectedIds.size} selected pin(s) on the map.`
+            : "Tip: select check-ins below to show only those pins on the map."}
+        </p>
         <div className="border-2 border-black rounded-lg overflow-hidden bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse" data-testid="checkins-table">
               <thead>
                 <tr className="bg-secondary text-secondary-foreground text-left uppercase text-xs tracking-wider">
+                  <th className="py-2 px-3 w-10">
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} data-testid="select-all-checkins" aria-label="Select all check-ins" />
+                  </th>
                   <th className="py-2 px-3">Submitted Details</th>
                   <th className="py-2 px-3">Coordinates</th>
                   <th className="py-2 px-3">Job</th>
                   <th className="py-2 px-3">Timestamp</th>
+                  <th className="py-2 px-3 w-10"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No check-ins yet.</td></tr>
-                ) : rows.map((r) => (
-                  <tr key={r.id} className="border-b border-border hover:bg-muted align-top" data-testid="checkin-row">
+                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No check-ins yet.</td></tr>
+                ) : rows.map((r) => {
+                  const isSel = selectedIds.has(r.id);
+                  return (
+                  <tr key={r.id} className={`border-b border-border hover:bg-muted align-top ${isSel ? "bg-primary/5" : ""}`} data-testid="checkin-row">
+                    <td className="py-2 px-3">
+                      <input type="checkbox" checked={isSel} onChange={() => toggleOne(r.id)} data-testid={`select-checkin-${r.id}`} aria-label="Select check-in" />
+                    </td>
                     <td className="py-2 px-3">
                       {(r.responses && r.responses.length > 0) ? (
                         <div className="space-y-0.5">
@@ -163,17 +231,28 @@ function CheckInsTab() {
                     <td className="py-2 px-3 font-mono text-xs">{r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}</td>
                     <td className="py-2 px-3">{jobTitle(r.job_id)}</td>
                     <td className="py-2 px-3 text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
+                    <td className="py-2 px-3">
+                      <button onClick={() => deleteOne(r.id)} data-testid={`delete-checkin-${r.id}`} className="text-destructive hover:opacity-70" aria-label="Delete check-in">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </div>
       <div>
-        <h2 className="font-display text-2xl font-black mb-3">Live Map</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-display text-2xl font-black">Live Map</h2>
+          {selectedIds.size > 0 && (
+            <Button size="sm" variant="outline" className="border-2 border-black" onClick={clearSelection} data-testid="show-all-pins-btn">Show all</Button>
+          )}
+        </div>
         <div className="h-[420px] border-2 border-black rounded-lg overflow-hidden">
-          <MapView center={mapCenter} zoom={11} markers={rows} recenterTo={rows.length ? mapCenter : null} />
+          <MapView center={mapCenter} zoom={11} markers={mapRows} recenterTo={mapRows.length ? mapCenter : null} />
         </div>
       </div>
     </div>
@@ -287,6 +366,9 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
       share_title: editing.share_title || "",
       share_description: editing.share_description || "",
       share_image_url: editing.share_image_url || "",
+      success_heading: editing.success_heading || "You're checked in!",
+      success_body: editing.success_body || "Your location was shared successfully. The supervisor has been notified.",
+      success_button_label: editing.success_button_label || "Check in another worker",
       active: editing.active,
     };
     try {
@@ -328,6 +410,17 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
               <Textarea data-testid="job-share-description" rows={2} value={editing.share_description || ""} onChange={(e) => setField("share_description", e.target.value)} placeholder="e.g. Tap to share your location and check in on-site." /></div>
             <div className="space-y-1.5"><Label className="text-xs">Preview Image</Label>
               <ImageInput testId="job-share-image" value={editing.share_image_url} onChange={(v) => setField("share_image_url", v)} previewClassName="h-24 w-full" /></div>
+          </div>
+
+          <div className="border-2 border-black rounded-lg p-4 space-y-3">
+            <Label className="uppercase tracking-widest text-xs font-bold">Success Message (after check-in)</Label>
+            <p className="text-xs text-muted-foreground">Shown in place of the form once a worker shares their location.</p>
+            <div className="space-y-1.5"><Label className="text-xs">Heading</Label>
+              <Input data-testid="job-success-heading" value={editing.success_heading || ""} onChange={(e) => setField("success_heading", e.target.value)} placeholder="You're checked in!" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Body Text</Label>
+              <Textarea data-testid="job-success-body" rows={2} value={editing.success_body || ""} onChange={(e) => setField("success_body", e.target.value)} placeholder="Your location was shared successfully." /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Button Label</Label>
+              <Input data-testid="job-success-button" value={editing.success_button_label || ""} onChange={(e) => setField("success_button_label", e.target.value)} placeholder="Check in another worker" /></div>
           </div>
 
           <div className="border-2 border-black rounded-lg p-4">

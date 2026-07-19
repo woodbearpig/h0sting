@@ -107,7 +107,6 @@ export default function CheckInPage() {
           setSubmitted(true);
           setConsentOpen(false);
           setRecenterTo([latitude, longitude]);
-          toast.success("Location shared! You are checked in.");
           fetchCheckins();
         } catch (e) {
           toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Submission failed.");
@@ -200,9 +199,9 @@ export default function CheckInPage() {
           {submitted ? (
             <div className="bg-card border-2 border-black rounded-lg p-6 text-center" data-testid="checkin-success">
               <CheckCircle2 className="h-12 w-12 text-[hsl(142,71%,45%)] mx-auto mb-3" />
-              <h2 className="font-display text-2xl font-black">You're checked in!</h2>
-              <p className="text-muted-foreground mt-1">
-                Your location was shared successfully. The supervisor has been notified.
+              <h2 className="font-display text-2xl font-black" data-testid="success-heading">{job.success_heading || "You're checked in!"}</h2>
+              <p className="text-muted-foreground mt-1 whitespace-pre-line" data-testid="success-body">
+                {job.success_body || "Your location was shared successfully. The supervisor has been notified."}
               </p>
               <Button
                 variant="outline"
@@ -210,7 +209,7 @@ export default function CheckInPage() {
                 onClick={() => setSubmitted(false)}
                 data-testid="checkin-again-btn"
               >
-                Check in another worker
+                {job.success_button_label || "Check in another worker"}
               </Button>
             </div>
           ) : (
