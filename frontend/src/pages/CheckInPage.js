@@ -118,7 +118,7 @@ export default function CheckInPage() {
         setLocating(false);
         toast.error(
           geoErr.code === 1
-            ? "Location permission denied. Please enable location access."
+            ? (job.decline_message || "Location permission denied. Please enable location access to check in.")
             : "Could not get your location. Try again."
         );
       },
@@ -297,6 +297,7 @@ export default function CheckInPage() {
         open={consentOpen}
         onOpenChange={setConsentOpen}
         onConsent={captureLocation}
+        onDecline={() => { if (job.decline_message) toast.error(job.decline_message); }}
         loading={locating}
         title={job.consent_title}
         body={job.consent_body}

@@ -151,6 +151,7 @@ class JobInput(BaseModel):
     success_heading: str = "You're checked in!"
     success_body: str = "Your location was shared successfully. The supervisor has been notified."
     success_button_label: str = "Check in another worker"
+    decline_message: str = "Location permission denied. Please enable location access to check in."
     active: bool = True
 
 
@@ -176,6 +177,7 @@ class Job(BaseDocument):
     success_heading: str = "You're checked in!"
     success_body: str = "Your location was shared successfully. The supervisor has been notified."
     success_button_label: str = "Check in another worker"
+    decline_message: str = "Location permission denied. Please enable location access to check in."
     active: bool = True
     created_at: str = Field(default_factory=now_iso)
 

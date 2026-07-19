@@ -13,6 +13,7 @@ export const PrivacyModal = ({
   open,
   onOpenChange,
   onConsent,
+  onDecline,
   loading,
   title = "Location Sharing Consent",
   body = "",
@@ -37,7 +38,7 @@ export const PrivacyModal = ({
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => { if (onDecline) onDecline(); onOpenChange(false); }}
             className="border-2 border-black"
             data-testid="privacy-decline-btn"
           >

@@ -35,6 +35,10 @@ const emptyJob = () => ({
   consent_agree_label: "I Agree & Share Location",
   consent_decline_label: "Decline",
   share_title: "", share_description: "", share_image_url: "",
+  success_heading: "You're checked in!",
+  success_body: "Your location was shared successfully. The supervisor has been notified.",
+  success_button_label: "Check in another worker",
+  decline_message: "Location permission denied. Please enable location access to check in.",
   active: true,
 });
 
@@ -369,6 +373,7 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
       success_heading: editing.success_heading || "You're checked in!",
       success_body: editing.success_body || "Your location was shared successfully. The supervisor has been notified.",
       success_button_label: editing.success_button_label || "Check in another worker",
+      decline_message: editing.decline_message || "Location permission denied. Please enable location access to check in.",
       active: editing.active,
     };
     try {
@@ -510,6 +515,8 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
               <Switch checked={editing.consent_enabled !== false} onCheckedChange={(v) => setField("consent_enabled", v)} data-testid="consent-enabled-switch" />
               <span className="uppercase tracking-widest text-xs font-bold">Location Consent Modal</span>
             </label>
+            <div className="space-y-1.5"><Label className="text-xs">Decline / Denied Message <span className="text-muted-foreground font-normal">(toast shown if the worker declines or the browser blocks location)</span></Label>
+              <Textarea data-testid="job-decline-message" rows={2} value={editing.decline_message || ""} onChange={(e) => setField("decline_message", e.target.value)} placeholder="Location permission denied. Please enable location access to check in." /></div>
             {editing.consent_enabled !== false && (
               <>
                 <div className="space-y-1.5"><Label className="text-xs">Modal Title</Label>
