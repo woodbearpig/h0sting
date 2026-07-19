@@ -13,6 +13,8 @@ from typing import List, Optional, Annotated, Any
 
 import jwt
 import bcrypt
+import aiosmtplib
+from email.message import EmailMessage
 from bson import ObjectId
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -194,6 +196,9 @@ class Settings(BaseModel):
     admin_login_heading: str = "Admin Console"
     admin_login_subtitle: str = "Contractor Check-In"
     admin_login_bg_url: str = ""
+    email_subject: str = "You're invited to check in on-site"
+    email_body: str = "Hi {name},\n\nPlease check in when you arrive on-site by tapping the button below. It only takes a moment and lets your supervisor know you're here."
+    email_button_label: str = "Check In Now"
 
 
 class ResponseItem(BaseModel):
@@ -439,6 +444,67 @@ async def share_image(job_id: Optional[str] = None):
     if img.startswith("http"):
         return RedirectResponse(img)
     raise HTTPException(status_code=404, detail="No share image set")
+
+
+# ---------------- Send invite email (auth, SMTP) ----------------
+class InviteInput(BaseModel):
+    to_email: EmailStr
+    contractor_name: str = ""
+    subject: str
+    body: str
+    button_label: str = "Check In Now"
+    link: str
+
+
+def _build_invite_message(payload: InviteInput, from_addr: str, brand_color: str) -> EmailMessage:
+    name = payload.contractor_name.strip() or "there"
+    body_filled = payload.body.replace("{name}", name)
+    link = payload.link
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = payload.to_email
+    msg["Subject"] = payload.subject.replace("{name}", name)
+    text = f"{body_filled}\n\n{payload.button_label}: {link}"
+    msg.set_content(text)
+    safe_body = _esc(body_filled).replace("\n", "<br/>")
+    html = f"""\
+<html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
+    <div style="background:#ffffff;border:2px solid #000;border-radius:10px;padding:28px;">
+      <p style="font-size:15px;line-height:1.6;margin:0 0 20px;">{safe_body}</p>
+      <p style="text-align:center;margin:28px 0;">
+        <a href="{_esc(link)}" style="display:inline-block;padding:14px 28px;background:{_esc(brand_color)};color:#ffffff;text-decoration:none;border:2px solid #000;border-radius:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;font-size:14px;">{_esc(payload.button_label)}</a>
+      </p>
+      <p style="font-size:12px;color:#71717a;margin:20px 0 0;">If the button doesn't work, copy and paste this link into your browser:<br/><a href="{_esc(link)}" style="color:{_esc(brand_color)};word-break:break-all;">{_esc(link)}</a></p>
+    </div>
+  </div>
+</body></html>"""
+    msg.add_alternative(html, subtype="html")
+    return msg
+
+
+@api_router.post("/send-invite")
+async def send_invite(payload: InviteInput, current=Depends(get_current_user)):
+    host = os.environ.get("SMTP_HOST")
+    user = os.environ.get("SMTP_USERNAME")
+    password = os.environ.get("SMTP_PASSWORD")
+    port = int(os.environ.get("SMTP_PORT") or "587")
+    from_addr = os.environ.get("SMTP_FROM") or user
+    if not (host and user and password):
+        raise HTTPException(status_code=500, detail="Email sending is not configured. Set SMTP_HOST, SMTP_USERNAME and SMTP_PASSWORD (and optionally SMTP_PORT/SMTP_FROM) in the backend .env, then restart the backend.")
+    if not (payload.link.startswith("http://") or payload.link.startswith("https://")):
+        raise HTTPException(status_code=400, detail="Link must be a full http(s) URL.")
+    settings = await _load_settings()
+    msg = _build_invite_message(payload, from_addr, settings.primary_color or "#EA580C")
+    use_tls = port == 465
+    start_tls = port != 465
+    try:
+        await aiosmtplib.send(msg, hostname=host, port=port, username=user, password=password,
+                              use_tls=use_tls, start_tls=start_tls, timeout=30)
+    except Exception as e:
+        logger.error("SMTP send failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Could not send email: {e}")
+    return {"status": "sent", "to": payload.to_email}
 
 
 app.include_router(api_router)

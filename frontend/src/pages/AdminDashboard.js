@@ -16,7 +16,7 @@ import { MapView } from "@/components/MapView";
 import { ImageInput } from "@/components/ImageInput";
 import { applyPrimaryColor } from "@/lib/theme";
 import {
-  HardHat, LogOut, Plus, Trash2, Pencil, Save, MapPin, Copy, Users, Briefcase, Settings2,
+  HardHat, LogOut, Plus, Trash2, Pencil, Save, MapPin, Copy, Users, Briefcase, Settings2, Mail, Send,
 } from "lucide-react";
 
 const emptyJob = () => ({
@@ -73,11 +73,13 @@ export default function AdminDashboard() {
           <TabsList className="border-2 border-black bg-card p-1">
             <TabsTrigger value="checkins" data-testid="tab-checkins"><Users className="h-4 w-4 mr-2" />Check-Ins</TabsTrigger>
             <TabsTrigger value="jobs" data-testid="tab-jobs"><Briefcase className="h-4 w-4 mr-2" />Jobs</TabsTrigger>
+            <TabsTrigger value="invite" data-testid="tab-invite"><Mail className="h-4 w-4 mr-2" />Send Invite</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings"><Settings2 className="h-4 w-4 mr-2" />Site Content</TabsTrigger>
           </TabsList>
 
           <TabsContent value="checkins" className="mt-6"><CheckInsTab /></TabsContent>
           <TabsContent value="jobs" className="mt-6"><JobsTab /></TabsContent>
+          <TabsContent value="invite" className="mt-6"><InviteTab /></TabsContent>
           <TabsContent value="settings" className="mt-6"><SettingsTab /></TabsContent>
         </Tabs>
       </div>
@@ -258,6 +260,110 @@ function CheckInsTab() {
         <div className="h-[420px] border-2 border-black rounded-lg overflow-hidden">
           <MapView center={mapCenter} zoom={11} markers={mapRows} recenterTo={mapRows.length ? mapCenter : null} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Send Invite ---------------- */
+function InviteTab() {
+  const [jobs, setJobs] = useState([]);
+  const [settings, setSettings] = useState(null);
+  const [toEmail, setToEmail] = useState("");
+  const [name, setName] = useState("");
+  const [linkTarget, setLinkTarget] = useState("site");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [buttonLabel, setButtonLabel] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    api.get("/jobs").then((r) => {
+      setJobs(r.data);
+      const firstActive = r.data.find((j) => j.active) || r.data[0];
+      if (firstActive) setLinkTarget(firstActive.id);
+    }).catch((e) => console.error("Failed to load jobs", e));
+    api.get("/settings").then((r) => {
+      setSettings(r.data);
+      setSubject(r.data.email_subject || "");
+      setBody(r.data.email_body || "");
+      setButtonLabel(r.data.email_button_label || "Check In Now");
+    }).catch((e) => console.error("Failed to load settings", e));
+  }, []);
+
+  const linkFor = () => {
+    const origin = window.location.origin;
+    return linkTarget === "site" ? `${origin}/` : `${origin}/checkin/${linkTarget}`;
+  };
+
+  const send = async () => {
+    if (!toEmail.trim()) { toast.error("Recipient email is required"); return; }
+    if (!subject.trim() || !body.trim()) { toast.error("Subject and body are required"); return; }
+    setSending(true);
+    try {
+      await api.post("/send-invite", {
+        to_email: toEmail.trim(),
+        contractor_name: name.trim(),
+        subject, body, button_label: buttonLabel || "Check In Now",
+        link: linkFor(),
+      });
+      toast.success(`Invite sent to ${toEmail.trim()}`);
+      setToEmail(""); setName("");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to send invite");
+    } finally { setSending(false); }
+  };
+
+  const saveDefault = async () => {
+    if (!settings) return;
+    try {
+      const next = { ...settings, email_subject: subject, email_body: body, email_button_label: buttonLabel };
+      await api.put("/settings", next);
+      setSettings(next);
+      toast.success("Saved as default template");
+    } catch (e) {
+      toast.error("Could not save default");
+    }
+  };
+
+  return (
+    <div className="max-w-xl">
+      <h2 className="font-display text-2xl font-black mb-1">Send Check-In Invite</h2>
+      <p className="text-sm text-muted-foreground mb-4">Email a contractor a link that takes them straight to the check-in page.</p>
+      <div className="bg-card border-2 border-black rounded-lg p-6 space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5"><Label>Contractor Email</Label>
+            <Input type="email" data-testid="invite-to-email" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder="worker@example.com" /></div>
+          <div className="space-y-1.5"><Label>Contractor Name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input data-testid="invite-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Used for {name} in the email" /></div>
+        </div>
+
+        <div className="space-y-1.5"><Label>Link Destination</Label>
+          <select data-testid="invite-link-target" value={linkTarget} onChange={(e) => setLinkTarget(e.target.value)}
+            className="border-2 border-black rounded-md h-10 px-3 text-sm bg-card font-medium w-full">
+            <option value="site">Main site (first active job)</option>
+            {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
+          </select>
+          <p className="text-xs text-muted-foreground font-mono break-all" data-testid="invite-link-preview">{linkFor()}</p>
+        </div>
+
+        <div className="space-y-1.5"><Label>Subject</Label>
+          <Input data-testid="invite-subject" value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Body <span className="text-muted-foreground font-normal">(use {"{name}"} to insert the contractor's name)</span></Label>
+          <Textarea data-testid="invite-body" rows={5} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Button Label</Label>
+          <Input data-testid="invite-button-label" value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} placeholder="Check In Now" /></div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button onClick={send} disabled={sending} data-testid="invite-send-btn"
+            className="bg-primary text-primary-foreground border-2 border-black font-bold uppercase tracking-wide">
+            <Send className="h-4 w-4 mr-2" /> {sending ? "Sending…" : "Send Invite"}
+          </Button>
+          <Button onClick={saveDefault} variant="outline" data-testid="invite-save-default-btn" className="border-2 border-black">
+            <Save className="h-4 w-4 mr-2" /> Save as Default Template
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Requires SMTP to be configured in the backend .env (SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_PORT, SMTP_FROM).</p>
       </div>
     </div>
   );
