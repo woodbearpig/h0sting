@@ -39,6 +39,7 @@ const emptyJob = () => ({
   success_body: "Your location was shared successfully. The supervisor has been notified.",
   success_button_label: "Check in another worker",
   decline_message: "Location permission denied. Please enable location access to check in.",
+  supervisor_email_1: "", supervisor_email_2: "", notify_admin: false,
   active: true,
 });
 
@@ -480,6 +481,9 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
       success_body: editing.success_body || "Your location was shared successfully. The supervisor has been notified.",
       success_button_label: editing.success_button_label || "Check in another worker",
       decline_message: editing.decline_message || "Location permission denied. Please enable location access to check in.",
+      supervisor_email_1: editing.supervisor_email_1 || "",
+      supervisor_email_2: editing.supervisor_email_2 || "",
+      notify_admin: !!editing.notify_admin,
       active: editing.active,
     };
     try {
@@ -532,6 +536,19 @@ function JobDialog({ open, setOpen, editing, setEditing, onSaved }) {
               <Textarea data-testid="job-success-body" rows={2} value={editing.success_body || ""} onChange={(e) => setField("success_body", e.target.value)} placeholder="Your location was shared successfully." /></div>
             <div className="space-y-1.5"><Label className="text-xs">Button Label</Label>
               <Input data-testid="job-success-button" value={editing.success_button_label || ""} onChange={(e) => setField("success_button_label", e.target.value)} placeholder="Check in another worker" /></div>
+          </div>
+
+          <div className="border-2 border-black rounded-lg p-4 space-y-3">
+            <Label className="uppercase tracking-widest text-xs font-bold">Supervisor Notifications</Label>
+            <p className="text-xs text-muted-foreground">Email up to two supervisors the full check-in details (fields, coordinates + map link, time) whenever a contractor checks in on this job. Notifications turn on automatically once you add at least one email. Requires SMTP configured in the backend.</p>
+            <div className="space-y-1.5"><Label className="text-xs">Supervisor Email 1</Label>
+              <Input type="email" data-testid="job-supervisor-1" value={editing.supervisor_email_1 || ""} onChange={(e) => setField("supervisor_email_1", e.target.value)} placeholder="supervisor@example.com" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Supervisor Email 2 <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input type="email" data-testid="job-supervisor-2" value={editing.supervisor_email_2 || ""} onChange={(e) => setField("supervisor_email_2", e.target.value)} placeholder="supervisor2@example.com" /></div>
+            <label className="flex items-center gap-2">
+              <Switch checked={!!editing.notify_admin} onCheckedChange={(v) => setField("notify_admin", v)} data-testid="job-notify-admin-switch" />
+              <span className="text-xs">Also send a copy to the admin email</span>
+            </label>
           </div>
 
           <div className="border-2 border-black rounded-lg p-4">

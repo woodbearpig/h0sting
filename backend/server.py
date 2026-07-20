@@ -16,7 +16,7 @@ import bcrypt
 import aiosmtplib
 from email.message import EmailMessage
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -154,6 +154,9 @@ class JobInput(BaseModel):
     success_body: str = "Your location was shared successfully. The supervisor has been notified."
     success_button_label: str = "Check in another worker"
     decline_message: str = "Location permission denied. Please enable location access to check in."
+    supervisor_email_1: str = ""
+    supervisor_email_2: str = ""
+    notify_admin: bool = False
     active: bool = True
 
 
@@ -180,6 +183,9 @@ class Job(BaseDocument):
     success_body: str = "Your location was shared successfully. The supervisor has been notified."
     success_button_label: str = "Check in another worker"
     decline_message: str = "Location permission denied. Please enable location access to check in."
+    supervisor_email_1: str = ""
+    supervisor_email_2: str = ""
+    notify_admin: bool = False
     active: bool = True
     created_at: str = Field(default_factory=now_iso)
 
@@ -329,7 +335,7 @@ async def delete_job(job_id: str, current=Depends(get_current_user)):
 
 # ---------------- Check-ins ----------------
 @api_router.post("/checkins", response_model=CheckIn, response_model_by_alias=False)
-async def create_checkin(payload: CheckInInput):
+async def create_checkin(payload: CheckInInput, background_tasks: BackgroundTasks):
     if not ObjectId.is_valid(payload.job_id):
         raise HTTPException(status_code=400, detail="Invalid job")
     job = await db.jobs.find_one({"_id": ObjectId(payload.job_id)})
@@ -350,7 +356,9 @@ async def create_checkin(payload: CheckInInput):
     doc = checkin.to_mongo()
     res = await db.checkins.insert_one(doc)
     doc["_id"] = res.inserted_id
-    return CheckIn.from_mongo(doc)
+    saved = CheckIn.from_mongo(doc)
+    background_tasks.add_task(_notify_checkin, job, saved)
+    return saved
 
 
 @api_router.get("/jobs/{job_id}/checkins", response_model=List[CheckIn], response_model_by_alias=False)
@@ -483,24 +491,97 @@ def _build_invite_message(payload: InviteInput, from_addr: str, brand_color: str
     return msg
 
 
-@api_router.post("/send-invite")
-async def send_invite(payload: InviteInput, current=Depends(get_current_user)):
+def _smtp_config():
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USERNAME")
     password = os.environ.get("SMTP_PASSWORD")
     port = int(os.environ.get("SMTP_PORT") or "587")
     from_addr = os.environ.get("SMTP_FROM") or user
+    return host, port, user, password, from_addr
+
+
+async def _smtp_send(msg: EmailMessage):
+    host, port, user, password, _ = _smtp_config()
+    if not (host and user and password):
+        raise RuntimeError("SMTP not configured")
+    await aiosmtplib.send(msg, hostname=host, port=port, username=user, password=password,
+                          use_tls=(port == 465), start_tls=(port != 465), timeout=30)
+
+
+def _build_checkin_notification(job_title, checkin: "CheckIn", from_addr, brand_color, recipients):
+    lat, lng = checkin.latitude, checkin.longitude
+    osm = f"https://www.openstreetmap.org/?mlat={lat}&mlon={lng}#map=18/{lat}/{lng}"
+    when = checkin.created_at
+    cell = 'style="padding:6px 10px;border:1px solid #e4e4e7;"'
+    keyc = 'style="padding:6px 10px;border:1px solid #e4e4e7;color:#71717a;"'
+    valc = 'style="padding:6px 10px;border:1px solid #e4e4e7;font-weight:600;"'
+    if checkin.responses:
+        rows = "".join(f"<tr><td {keyc}>{_esc(r.label)}</td><td {valc}>{_esc(r.value) or '—'}</td></tr>" for r in checkin.responses)
+    else:
+        rows = (f"<tr><td {keyc}>Name</td><td {valc}>{_esc(checkin.contractor_name) or '—'}</td></tr>"
+                f"<tr><td {keyc}>Email</td><td {valc}>{_esc(checkin.email) or '—'}</td></tr>")
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = ", ".join(recipients)
+    msg["Subject"] = f"New check-in — {job_title}"
+    text = (f"New check-in for {job_title}\n\n"
+            + "".join(f"{r.label}: {r.value}\n" for r in checkin.responses)
+            + f"Coordinates: {lat}, {lng}\nMap: {osm}\nTime: {when}\n")
+    msg.set_content(text)
+    html = f"""\
+<html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
+    <div style="background:#ffffff;border:2px solid #000;border-radius:10px;padding:28px;">
+      <h2 style="margin:0 0 4px;font-size:20px;">New Check-In</h2>
+      <p style="margin:0 0 18px;color:#71717a;font-size:14px;">{_esc(job_title)}</p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px;">{rows}
+        <tr><td {keyc}>Coordinates</td><td {valc}>{lat}, {lng}</td></tr>
+        <tr><td {keyc}>Time</td><td {valc}>{_esc(when)}</td></tr>
+      </table>
+      <p style="text-align:center;margin:24px 0 4px;">
+        <a href="{_esc(osm)}" style="display:inline-block;padding:12px 24px;background:{_esc(brand_color)};color:#fff;text-decoration:none;border:2px solid #000;border-radius:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;font-size:13px;">View on Map</a>
+      </p>
+    </div>
+  </div>
+</body></html>"""
+    msg.add_alternative(html, subtype="html")
+    return msg
+
+
+async def _notify_checkin(job: dict, checkin: "CheckIn"):
+    recipients = []
+    for e in [job.get("supervisor_email_1"), job.get("supervisor_email_2")]:
+        if e and e.strip():
+            recipients.append(e.strip())
+    if job.get("notify_admin"):
+        admin = os.environ.get("ADMIN_EMAIL")
+        if admin and admin not in recipients:
+            recipients.append(admin)
+    if not recipients:
+        return
+    host, port, user, password, from_addr = _smtp_config()
+    if not (host and user and password):
+        logger.warning("Check-in notification skipped: SMTP not configured")
+        return
+    settings = await _load_settings()
+    msg = _build_checkin_notification(job.get("title", "Check-In"), checkin, from_addr, settings.primary_color or "#EA580C", recipients)
+    try:
+        await _smtp_send(msg)
+    except Exception as e:
+        logger.error("Check-in notification failed: %s", e)
+
+
+@api_router.post("/send-invite")
+async def send_invite(payload: InviteInput, current=Depends(get_current_user)):
+    host, port, user, password, from_addr = _smtp_config()
     if not (host and user and password):
         raise HTTPException(status_code=500, detail="Email sending is not configured. Set SMTP_HOST, SMTP_USERNAME and SMTP_PASSWORD (and optionally SMTP_PORT/SMTP_FROM) in the backend .env, then restart the backend.")
     if not (payload.link.startswith("http://") or payload.link.startswith("https://")):
         raise HTTPException(status_code=400, detail="Link must be a full http(s) URL.")
     settings = await _load_settings()
     msg = _build_invite_message(payload, from_addr, settings.primary_color or "#EA580C")
-    use_tls = port == 465
-    start_tls = port != 465
     try:
-        await aiosmtplib.send(msg, hostname=host, port=port, username=user, password=password,
-                              use_tls=use_tls, start_tls=start_tls, timeout=30)
+        await _smtp_send(msg)
     except Exception as e:
         logger.error("SMTP send failed: %s", e)
         raise HTTPException(status_code=502, detail=f"Could not send email: {e}")
